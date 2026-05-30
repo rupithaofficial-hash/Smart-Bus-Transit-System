@@ -34,3 +34,4 @@ Daily bus users often face confusion due to a lack of clear, real-time informati
 ## 📂 Repository Contents
 * `/smart-transpot4.html` — The interactive web environment presented to the hackathon evaluation panel.
 * `/Puduvai Innovation Contest - LEVEL 2 - PPT.pdf` — The complete technical and business architecture pitch slides used during the Level 2 evaluation phase[cite: 3].
+`/prototype_screenshot.png` — Visual screenshot showcasing the live frontend interface layout.
