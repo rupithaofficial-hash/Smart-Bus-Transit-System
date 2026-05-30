@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SmartBus — AI Transport System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg:#09090f; --surface:#111118; --card:#16161f; --border:#22223a;
+    --accent:#00e5ff; --accent2:#7c3aed; --green:#22c55e;
+    --yellow:#fbbf24; --red:#f43f5e; --text:#e8e8f0; --muted:#6b6b88;
+    --font-display:'Syne',sans-serif; --font-mono:'Space Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-display);overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:1000;flex-shrink:0;}
+  .logo{display:flex;align-items:center;gap:8px;}
+  .logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .logo-text{font-size:18px;font-weight:800;letter-spacing:-0.5px;}
+  .logo-text span{color:var(--accent);}
+  .live-badge{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--green);letter-spacing:1px;}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
+
+  #map-wrap{position:relative;flex:1;min-height:0;}
+  #map{width:100%;height:100%;}
+  .map-controls{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:900;}
+  .map-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.4);transition:border-color .2s;}
+  .map-btn:hover{border-color:var(--accent);}
+
+  #panel{background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;max-height:58vh;overflow-y:auto;transition:max-height .3s ease;}
+  #panel.collapsed{max-height:110px;overflow:hidden;}
+  .panel-handle{padding:12px 16px 8px;cursor:pointer;}
+  .handle-bar{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 8px;}
+  .panel-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-family:var(--font-mono);text-align:center;}
+
+  .stats-row{display:flex;gap:8px;padding:4px 16px 12px;}
+  .stat-chip{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 10px;text-align:center;}
+  .stat-val{font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--accent);}
+  .stat-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+
+  .search-row{display:flex;gap:8px;padding:0 16px 12px;}
+  .search-input{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:var(--font-display);font-size:14px;outline:none;transition:border-color .2s;}
+  .search-input:focus{border-color:var(--accent);}
+  .search-input::placeholder{color:var(--muted);}
+  .search-btn{background:var(--accent);color:#000;border:none;border-radius:10px;padding:10px 16px;font-family:var(--font-display);font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;transition:opacity .2s;}
+  .search-btn:hover{opacity:.85;}
+
+  #ai-suggestion{margin:0 16px 12px;background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(124,58,237,.06));border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:12px 14px;display:none;animation:slideIn .3s ease;}
+  @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .ai-label{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+  .ai-text{font-size:14px;font-weight:600;line-height:1.4;}
+  .ai-sub{font-size:12px;color:var(--muted);margin-top:4px;font-family:var(--font-mono);line-height:1.5;}
+
+  #alert-banner{margin:0 16px 8px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 14px;display:none;font-size:13px;color:var(--yellow);font-family:var(--font-mono);animation:slideIn .3s ease;}
+  #no-result{margin:0 16px 12px;background:rgba(244,63,94,.07);border:1px solid rgba(244,63,94,.2);border-radius:12px;padding:16px;display:none;text-align:center;animation:slideIn .3s ease;}
+  .nr-icon{font-size:28px;margin-bottom:6px;}
+  .nr-title{font-size:14px;font-weight:700;}
+  .nr-sub{font-size:12px;color:var(--muted);margin-top:5px;font-family:var(--font-mono);line-height:1.5;}
+
+  .buses-list{padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;}
+  .bus-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px;cursor:pointer;transition:border-color .2s,transform .1s;position:relative;}
+  .bus-card:active{transform:scale(.98);}
+  .bus-card.best{border-color:var(--accent);}
+  .best-badge{position:absolute;top:-9px;right:10px;background:var(--accent);color:#000;font-family:var(--font-mono);font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.5px;display:none;}
+  .bus-card.best .best-badge{display:block;}
+  .bus-num{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;color:#fff;}
+  .bus-info{flex:1;min-width:0;}
+  .bus-route{font-weight:700;font-size:13px;line-height:1.3;}
+  .bus-stops{font-size:11px;color:var(--muted);margin-top:2px;}
+  .bus-via{font-size:11px;color:var(--accent);margin-top:3px;font-family:var(--font-mono);}
+  .bus-meta{text-align:right;flex-shrink:0;min-width:64px;}
+  .eta{font-family:var(--font-mono);font-weight:700;font-size:15px;}
+  .eta.soon{color:var(--green);}
+  .eta.delayed{color:var(--red);}
+  .eta.normal{color:var(--accent);}
+  .crowd-badge{font-size:10px;margin-top:4px;font-family:var(--font-mono);letter-spacing:.5px;}
+  .crowd-badge.low{color:var(--green);}
+  .crowd-badge.mid{color:var(--yellow);}
+  .crowd-badge.high{color:var(--red);}
+  .status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:3px;background:currentColor;}
+  .crowd-reason{font-size:9px;color:var(--muted);font-family:var(--font-mono);margin-top:2px;line-height:1.3;}
+  .delay-tag{font-size:9px;color:var(--muted);font-family:var(--font-mono);margin-top:2px;}
+
+  .feedback-row{display:flex;align-items:center;gap:5px;margin-top:7px;}
+  .fb-label{font-size:10px;color:var(--muted);font-family:var(--font-mono);}
+  .fb-btn{font-size:10px;font-family:var(--font-mono);border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer;background:transparent;color:var(--text);transition:all .2s;}
+  .fb-btn:hover{border-color:var(--accent);}
+  .fb-btn.voted-yes{background:rgba(244,63,94,.2);border-color:var(--red);color:var(--red);}
+  .fb-btn.voted-no{background:rgba(34,197,94,.2);border-color:var(--green);color:var(--green);}
+
+  #qr-modal{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+  #qr-modal.open{display:flex;}
+  .qr-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px;text-align:center;max-width:300px;width:90%;animation:slideIn .3s ease;}
+  .qr-title{font-size:18px;font-weight:800;margin-bottom:4px;}
+  .qr-sub{font-size:12px;color:var(--muted);margin-bottom:20px;font-family:var(--font-mono);}
+  .qr-url{font-family:var(--font-mono);font-size:11px;color:var(--accent);background:var(--card);padding:8px 14px;border-radius:8px;display:block;margin-bottom:16px;word-break:break-all;}
+  .qr-close{background:var(--accent2);color:#fff;border:none;border-radius:10px;padding:10px 24px;font-family:var(--font-display);font-weight:700;cursor:pointer;font-size:14px;}
+
+  #loading{position:fixed;inset:0;z-index:9998;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .load-icon{font-size:48px;animation:spin 2s linear infinite;}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  .load-text{font-family:var(--font-mono);font-size:13px;color:var(--muted);letter-spacing:1px;}
+  .load-bar{width:200px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .load-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));width:0%;border-radius:2px;animation:fill 1.8s ease forwards;}
+  @keyframes fill{to{width:100%}}
+
+  #panel::-webkit-scrollbar{width:4px;}
+  #panel::-webkit-scrollbar-track{background:transparent;}
+  #panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  .leaflet-container{background:#12121a !important;}
+  .leaflet-tile{filter:brightness(.85) saturate(.6) hue-rotate(200deg);}
+  .leaflet-control-attribution,.leaflet-control-zoom{display:none !important;}
+
+  @media(min-width:640px){
+    #app{flex-direction:row;}
+    #map-wrap{flex:1;}
+    #panel{width:360px;max-height:100vh;border-top:none;border-left:1px solid var(--border);flex-shrink:0;}
+    #panel.collapsed{max-height:100vh;overflow-y:auto;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="load-icon">&#128652;</div>
+  <div class="load-text">INITIALIZING SMARTBUS AI...</div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+</div>
+
+<div id="qr-modal">
+  <div class="qr-box">
+    <div class="qr-title">&#128241; Scan to Board</div>
+    <div class="qr-sub">Share this app via QR code</div>
+    <svg id="qr-svg-el" width="180" height="180" viewBox="0 0 180 180" style="display:block;margin:0 auto 20px"></svg>
+    <span class="qr-url">smartbus.app/puducherry?ref=qr</span>
+    <br><br>
+    <button class="qr-close" onclick="document.getElementById('qr-modal').classList.remove('open')">Close</button>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">&#128652;</div>
+      <div class="logo-text">Smart<span>Bus</span></div>
+    </div>
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+  </header>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div class="map-controls">
+      <div class="map-btn" onclick="centerMap()" title="Center map">&#8853;</div>
+      <div class="map-btn" onclick="document.getElementById('qr-modal').classList.add('open')" title="QR">&#9638;</div>
+      <div class="map-btn" onclick="refreshBuses()" title="Refresh">&#8635;</div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div class="panel-handle" onclick="togglePanel()">
+      <div class="handle-bar"></div>
+      <div class="panel-title">&#128506; Live Bus Tracker &mdash; Puducherry</div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-chip"><div class="stat-val" id="stat-buses">0</div><div class="stat-lbl">Active Buses</div></div>
+      <div class="stat-chip"><div class="stat-val" id="stat-eta">&#8212;</div><div class="stat-lbl">Next Arrival</div></div>
+      <div class="stat-chip"><div class="stat-val" id="stat-ontime">0%</div><div class="stat-lbl">On-Time</div></div>
+    </div>
+
+    <div class="search-row">
+      <input class="search-input" id="dest-input" placeholder="Enter your stop or area..." list="dest-list" autocomplete="off" />
+      <datalist id="dest-list"></datalist>
+      <button class="search-btn" onclick="searchRoute()">Find &#8594;</button>
+    </div>
+
+    <div id="alert-banner"></div>
+    <div id="no-result">
+      <div class="nr-icon">&#128683;</div>
+      <div class="nr-title">No direct bus found</div>
+      <div class="nr-sub" id="nr-sub"></div>
+    </div>
+    <div id="ai-suggestion">
+      <div class="ai-label"><span>&#129302;</span>&nbsp;AI Recommendation</div>
+      <div class="ai-text" id="ai-text"></div>
+      <div class="ai-sub" id="ai-sub"></div>
+    </div>
+
+    <div class="buses-list" id="buses-list"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// ROUTE DATA
+// Each route has its own stops — a bus only serves those stops.
+// routeType determines the crowd pattern.
+// ================================================================
+const CITY_CENTER = [11.9416, 79.8083];
+
+const ROUTES = [
+  {
+    id:'B1', num:'1A', color:'#7c3aed', routeType:'intercity',
+    name:'Bus Stand to Villupuram',
+    stops:['Pondicherry Bus Stand','Lawspet','Ariyankuppam','Thiruvandipuram','Villupuram'],
+    startCoord:[11.9416,79.8083],
+  },
+  {
+    id:'B2', num:'5', color:'#0ea5e9', routeType:'hospital',
+    name:'JIPMER to Auroville',
+    stops:['JIPMER','Gorimedu','Kalapet','Auroville'],
+    startCoord:[11.9370,79.8210],
+  },
+  {
+    id:'B3', num:'7', color:'#16a34a', routeType:'beach',
+    name:'Rock Beach to Osudu',
+    stops:['Rock Beach','White Town','Mission Street','Osudu Lake'],
+    startCoord:[11.9340,79.8360],
+  },
+  {
+    id:'B4', num:'9', color:'#d97706', routeType:'industrial',
+    name:'Murungapakkam to Bus Stand',
+    stops:['Murungapakkam','Sedarapet','Lawspet','Pondicherry Bus Stand'],
+    startCoord:[11.9620,79.7980],
+  },
+  {
+    id:'B5', num:'12', color:'#dc2626', routeType:'college',
+    name:'Kalapet to Villupuram',
+    stops:['Kalapet','JIPMER','Gorimedu','Pondicherry Bus Stand','Villupuram'],
+    startCoord:[11.9530,79.8290],
+  },
+  {
+    id:'B6', num:'3B', color:'#a855f7', routeType:'beach',
+    name:'Auroville to Rock Beach',
+    stops:['Auroville','Kalapet','Mission Street','White Town','Rock Beach'],
+    startCoord:[11.9640,79.8120],
+  },
+];
+
+// All unique stop names for autocomplete
+const ALL_STOPS = [...new Set(ROUTES.flatMap(r => r.stops))].sort();
+
+// ================================================================
+// STATE
+// ================================================================
+let buses       = [];
+let map         = null;
+let markers     = {};
+let userMarker  = null;
+let panelCollapsed = false;
+let tickInterval   = null;
+let bestBusId      = '';   // ONLY AI search sets this
+let currentDest    = '';
+let searchActive   = false;
+
+// ================================================================
+// LOAD LEAFLET DYNAMICALLY
+// ================================================================
+function loadLeaflet() {
+  return new Promise((resolve, reject) => {
+    if (window.L) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload  = resolve;
+    s.onerror = () => reject(new Error('Leaflet failed to load'));
+    document.head.appendChild(s);
+  });
+}
+
+// ================================================================
+// BUS INIT
+// ETAs are spread out so buses are not all at the same time.
+// Delay is higher for hospital/industrial routes (real pattern).
+// ================================================================
+function initBuses() {
+  const etaSpreads = [3, 7, 11, 15, 19, 24];
+  buses = ROUTES.map((r, i) => ({
+    ...r,
+    lat: r.startCoord[0] + (Math.random() - .5) * .009,
+    lng: r.startCoord[1] + (Math.random() - .5) * .009,
+    speed:   0.00014 + Math.random() * 0.00018,
+    heading: Math.random() * Math.PI * 2,
+    delay:   (r.routeType === 'hospital' || r.routeType === 'industrial')
+               ? Math.floor(2 + Math.random() * 6)
+               : Math.floor(Math.random() * 3),
+    eta:         etaSpreads[i] + (Math.random() - .5) * 1.5,
+    crowdOffset: 0,
+  }));
+}
+
+// ================================================================
+// HYBRID CROWD MODEL
+// Layer 1: Time of day (universal base score 0/1/2)
+// Layer 2: Route-type adjustment (+1 / 0 / -1)
+// Layer 3: User feedback offset (crowdOffset)
+// Final:   clamped to 0-2, mapped to LOW/MID/HIGH
+// ================================================================
+function timeBase() {
+  const h = new Date().getHours();
+  const isWeekend = [0, 6].includes(new Date().getDay());
+  if (isWeekend)            return 1;
+  if (h >= 8  && h <= 10)  return 2;
+  if (h >= 16 && h <= 19)  return 2;
+  if (h >= 10 && h <= 16)  return 1;
+  return 0;
+}
+
+function routeAdjust(routeType) {
+  const h = new Date().getHours();
+  const isWeekend = [0, 6].includes(new Date().getDay());
+  switch (routeType) {
+    case 'college':
+      if ((h >= 8 && h <= 9) || (h >= 16 && h <= 17)) return +1;
+      if (h >= 10 && h <= 15) return -1;
+      return 0;
+    case 'hospital':
+      if ((h >= 7 && h <= 9) || (h >= 13 && h <= 15) || (h >= 20 && h <= 22)) return +1;
+      return 0;
+    case 'beach':
+      if (isWeekend || (h >= 17 && h <= 20)) return +1;
+      if (h < 9) return -1;
+      return 0;
+    case 'industrial':
+      if ((h >= 7 && h <= 8) || (h >= 17 && h <= 18)) return +1;
+      return 0;
+    default: return 0;
+  }
+}
+
+function calcCrowd(bus) {
+  const score = Math.max(0, Math.min(2, timeBase() + routeAdjust(bus.routeType) + (bus.crowdOffset || 0)));
+  return ['LOW', 'MID', 'HIGH'][score];
+}
+
+// Crowd reason: only shows the reason that is ACTIVE right now
+function crowdReason(bus) {
+  const h = new Date().getHours();
+  const isWeekend = [0, 6].includes(new Date().getDay());
+  const crowd = calcCrowd(bus);
+  switch (bus.routeType) {
+    case 'college':
+      if ((h >= 8 && h <= 9) || (h >= 16 && h <= 17)) return 'College peak hours';
+      if (h >= 10 && h <= 15) return 'Students inside — bus empty';
+      return 'Off college hours';
+    case 'hospital':
+      if (h >= 7  && h <= 9)  return 'JIPMER morning shift';
+      if (h >= 13 && h <= 15) return 'JIPMER afternoon shift';
+      if (h >= 20 && h <= 22) return 'JIPMER night shift';
+      return 'Between JIPMER shifts';
+    case 'beach':
+      if (isWeekend) return 'Weekend — beach is busy';
+      if (h >= 17 && h <= 20) return 'Evening walkers at beach';
+      if (h < 9)  return 'Beach empty this early';
+      return 'Normal hours';
+    case 'industrial':
+      if (h >= 7 && h <= 8)   return 'Factory morning shift';
+      if (h >= 17 && h <= 18) return 'Factory evening shift';
+      return 'Between factory shifts';
+    case 'intercity':
+      if (h >= 8  && h <= 10) return 'Morning commuter rush';
+      if (h >= 16 && h <= 19) return 'Evening commuter rush';
+      return 'Off-peak hours';
+    default: return '';
+  }
+}
+
+// ================================================================
+// DELAY PREDICTION
+// High crowd = more boarding time = more delay.
+// This connects crowd and delay so they are NOT independent.
+// ================================================================
+function calcDelay(bus) {
+  const h = new Date().getHours();
+  const crowd = calcCrowd(bus);
+  const timeFactor = (h >= 8 && h <= 10) ? 1.8
+    : (h >= 16 && h <= 19) ? 1.6
+    : (h >= 22 || h <= 5)  ? 0.4 : 1.0;
+  const crowdExtra = crowd === 'HIGH' ? 3 : crowd === 'MID' ? 1 : 0;
+  const predicted  = Math.round(bus.delay * timeFactor) + crowdExtra;
+  const label      = predicted >= 6 ? 'HIGH' : predicted >= 3 ? 'MED' : 'LOW';
+  return { predicted, label };
+}
+
+// ================================================================
+// ROUTE MATCHING
+// A bus is only shown for a destination if that destination
+// matches one of its actual stops (fuzzy, case-insensitive).
+// ================================================================
+function busServesStop(bus, dest) {
+  const d = dest.toLowerCase().trim();
+  return bus.stops.some(stop =>
+    stop.toLowerCase().includes(d) || d.includes(stop.toLowerCase())
+  );
+}
+
+function matchedStop(bus, dest) {
+  const d = dest.toLowerCase().trim();
+  return bus.stops.find(stop =>
+    stop.toLowerCase().includes(d) || d.includes(stop.toLowerCase())
+  ) || null;
+}
+
+// ================================================================
+// AI SCORING — lower = better
+// Factors: ETA + delay + crowd, all weighted
+// Tiebreaker: route relevance (stops closer to start of route = sooner)
+// ================================================================
+function scoreBus(bus) {
+  const crowd = calcCrowd(bus);
+  const { predicted } = calcDelay(bus);
+  const crowdW = { LOW: 0, MID: 2, HIGH: 5 };
+  return bus.eta + predicted * 1.3 + (crowdW[crowd] || 0);
+}
+
+// ================================================================
+// MAP
+// ================================================================
+function initMap() {
+  if (!window.L) return;
+  map = window.L.map('map', { center: CITY_CENTER, zoom: 13, zoomControl: false });
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  userMarker = window.L.circleMarker(CITY_CENTER, {
+    radius: 9, color: '#00e5ff', fillColor: '#00e5ff', fillOpacity: .85, weight: 2,
+  }).addTo(map).bindPopup('<b>You are here</b>');
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      userMarker.setLatLng(ll);
+      map.setView(ll, 13);
+    }, () => {});
+  }
+}
+
+function busIcon(bus, highlight) {
+  const bg  = highlight ? '#00e5ff' : bus.color;
+  const col = highlight ? '#000' : '#fff';
+  return window.L.divIcon({
+    className: '',
+    html: `<div style="background:${bg};border:2px solid rgba(255,255,255,.35);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${col};font-family:'Space Mono',monospace;box-shadow:0 0 14px ${bg}aa;">${bus.num}</div>`,
+    iconSize: [36, 36], iconAnchor: [18, 18],
+  });
+}
+
+function updateMarkers() {
+  if (!map || !window.L) return;
+  buses.forEach(bus => {
+    const hl = bus.id === bestBusId;
+    const crowd = calcCrowd(bus);
+    const { predicted } = calcDelay(bus);
+    const popupHtml = `<div style="font-family:'Space Mono',monospace;font-size:12px;line-height:1.8">
+      <b>Bus ${bus.num}</b><br>
+      ${bus.name}<br>
+      ETA: ${Math.round(bus.eta)} min<br>
+      Crowd: ${crowd} &mdash; ${crowdReason(bus)}<br>
+      Delay risk: +${predicted} min
+    </div>`;
+    if (markers[bus.id]) {
+      markers[bus.id].setLatLng([bus.lat, bus.lng]);
+      markers[bus.id].setIcon(busIcon(bus, hl));
+      markers[bus.id].setPopupContent(popupHtml);
+    } else {
+      markers[bus.id] = window.L.marker([bus.lat, bus.lng], { icon: busIcon(bus, hl) })
+        .addTo(map).bindPopup(popupHtml);
+    }
+  });
+}
+
+function centerMap() { if (map) map.setView(CITY_CENTER, 13); }
+
+// ================================================================
+// TICK — runs every 2 seconds
+// ================================================================
+function tick() {
+  if (!buses.length) return;
+  buses.forEach(bus => {
+    bus.heading += (Math.random() - .5) * .4;
+    bus.lat += Math.cos(bus.heading) * bus.speed;
+    bus.lng += Math.sin(bus.heading) * bus.speed;
+    bus.lat = Math.max(11.89, Math.min(11.99, bus.lat));
+    bus.lng = Math.max(79.77, Math.min(79.88, bus.lng));
+    // ETA counts down slowly
+    bus.eta = Math.max(1, parseFloat((bus.eta - 0.07 + (Math.random() - .5) * .12).toFixed(1)));
+    // Delay drifts — hospital/industrial more volatile
+    const volatile = bus.routeType === 'hospital' || bus.routeType === 'industrial';
+    if (Math.random() < (volatile ? .06 : .025)) {
+      bus.delay = Math.max(0, bus.delay + (Math.random() > .45 ? 1 : -1));
+    }
+  });
+  updateMarkers();
+  updateStats();
+  renderBusList();
+}
+
+// ================================================================
+// SEARCH
+// Only show buses whose stops actually include the destination.
+// If none match, show "No direct bus" message.
+// ================================================================
+function searchRoute() {
+  const dest = document.getElementById('dest-input').value.trim();
+  if (!dest || !buses.length) return;
+  currentDest  = dest;
+  searchActive = true;
+
+  const alertEl    = document.getElementById('alert-banner');
+  const noResultEl = document.getElementById('no-result');
+  const aiEl       = document.getElementById('ai-suggestion');
+  alertEl.style.display    = 'none';
+  noResultEl.style.display = 'none';
+  aiEl.style.display       = 'none';
+
+  const matching = buses.filter(b => busServesStop(b, dest));
+
+  if (matching.length === 0) {
+    bestBusId = '';
+    noResultEl.style.display = 'block';
+    document.getElementById('nr-sub').textContent =
+      '"' + dest + '" is not on any current bus route. Try: ' + ALL_STOPS.slice(0, 5).join(', ') + '...';
+    updateMarkers();
+    renderBusList();
+    return;
+  }
+
+  // Score and pick best
+  const scored = [...matching].map(b => ({ ...b, score: scoreBus(b) })).sort((a, b) => a.score - b.score);
+  const best   = scored[0];
+  bestBusId    = best.id;
+  updateMarkers();
+  if (map) map.setView([best.lat, best.lng], 14);
+
+  // AI card
+  const crowd           = calcCrowd(best);
+  const { predicted, label } = calcDelay(best);
+  const reason          = crowdReason(best);
+  aiEl.style.display    = 'block';
+  document.getElementById('ai-text').textContent =
+    'Take Bus ' + best.num + ' \u2014 arrives in ' + Math.round(best.eta) + ' min';
+  document.getElementById('ai-sub').textContent =
+    'Crowd: ' + crowd + ' (' + reason + ')\nDelay risk: +' + predicted + ' min (' + label + ')';
+
+  // Smart alerts
+  alertEl.style.color       = '';
+  alertEl.style.borderColor = '';
+  alertEl.style.background  = '';
+  if (best.eta <= 2) {
+    alertEl.innerHTML         = '&#128276; Bus ' + best.num + ' arriving in ' + Math.round(best.eta) + ' min \u2014 go to the stop NOW!';
+    alertEl.style.borderColor = 'rgba(34,197,94,.4)';
+    alertEl.style.color       = '#22c55e';
+    alertEl.style.display     = 'block';
+  } else if (predicted >= 6) {
+    const backup = matching.find(b => b.id !== best.id);
+    alertEl.innerHTML     = '&#9888;&#65039; Bus ' + best.num + ' may be ' + predicted + ' min late' +
+      (backup ? ' \u2014 Bus ' + backup.num + ' is a backup option.' : '.');
+    alertEl.style.display = 'block';
+  }
+
+  renderBusList();
+}
+
+// ================================================================
+// RENDER BUS CARDS
+// Search mode: only matching buses, sorted by AI score
+// Browse mode: all buses, sorted by ETA (no best badge)
+// ================================================================
+function renderBusList() {
+  if (!buses.length) return;
+
+  let toShow;
+  if (searchActive && currentDest) {
+    const matching = buses.filter(b => busServesStop(b, currentDest));
+    if (!matching.length) { document.getElementById('buses-list').innerHTML = ''; return; }
+    toShow = [...matching].map(b => ({ ...b, score: scoreBus(b) })).sort((a, b) => a.score - b.score);
+  } else {
+    toShow = [...buses].sort((a, b) => a.eta - b.eta);
+  }
+
+  const html = toShow.map(bus => {
+    const isBest      = bus.id === bestBusId && searchActive;
+    const crowd       = calcCrowd(bus);
+    const { predicted, label } = calcDelay(bus);
+    const crowdClass  = crowd === 'LOW' ? 'low' : crowd === 'MID' ? 'mid' : 'high';
+    const crowdEmoji  = crowd === 'LOW' ? '&#128994;' : crowd === 'MID' ? '&#128993;' : '&#128308;';
+    const etaClass    = bus.eta <= 3 ? 'soon' : predicted >= 6 ? 'delayed' : 'normal';
+    const reason      = crowdReason(bus);
+    const via         = (searchActive && currentDest) ? matchedStop(bus, currentDest) : null;
+
+    return `<div class="bus-card${isBest ? ' best' : ''}" onclick="focusBus('${bus.id}')">
+      <div class="best-badge">&#9733; BEST PICK</div>
+      <div class="bus-num" style="background:${bus.color}">${bus.num}</div>
+      <div class="bus-info">
+        <div class="bus-route">${bus.name}</div>
+        <div class="bus-stops">${bus.stops[0]} &#8594; ${bus.stops[bus.stops.length-1]}</div>
+        ${via ? `<div class="bus-via">&#128204; Stops at ${via}</div>` : ''}
+        <div class="feedback-row" onclick="event.stopPropagation()">
+          <span class="fb-label">Crowded?</span>
+          <button class="fb-btn${bus.crowdOffset > 0 ? ' voted-yes' : ''}" onclick="crowdFeedback('${bus.id}',1)">&#128545; Yes</button>
+          <button class="fb-btn${bus.crowdOffset < 0 ? ' voted-no'  : ''}" onclick="crowdFeedback('${bus.id}',-1)">&#128522; No</button>
+        </div>
+      </div>
+      <div class="bus-meta">
+        <div class="eta ${etaClass}">${Math.round(bus.eta)} min</div>
+        <div class="crowd-badge ${crowdClass}"><span class="status-dot"></span>${crowdEmoji} ${crowd}</div>
+        <div class="crowd-reason">${reason}</div>
+        <div class="delay-tag">+${predicted}m delay (${label})</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('buses-list').innerHTML = html;
+}
+
+// ================================================================
+// FOCUS BUS — clicking a card shows it on map but does NOT
+// change which bus is BEST PICK. That is AI's decision only.
+// ================================================================
+function focusBus(id) {
+  const bus = buses.find(b => b.id === id);
+  if (bus && map) {
+    map.setView([bus.lat, bus.lng], 15);
+    if (markers[id]) markers[id].openPopup();
+  }
+}
+
+// ================================================================
+// CROWD FEEDBACK
+// ================================================================
+function crowdFeedback(busId, vote) {
+  const bus = buses.find(b => b.id === busId);
+  if (!bus) return;
+  bus.crowdOffset = Math.max(-1, Math.min(1, (bus.crowdOffset || 0) + vote));
+  renderBusList();
+}
+
+// ================================================================
+// STATS
+// ================================================================
+function updateStats() {
+  if (!buses.length) return;
+  document.getElementById('stat-buses').textContent = buses.length;
+  const minEta = Math.min(...buses.map(b => b.eta));
+  document.getElementById('stat-eta').textContent   = Math.round(minEta) + 'm';
+  const onTime = buses.filter(b => calcDelay(b).predicted < 3).length;
+  document.getElementById('stat-ontime').textContent = Math.round((onTime / buses.length) * 100) + '%';
+}
+
+function refreshBuses() {
+  bestBusId    = '';
+  currentDest  = '';
+  searchActive = false;
+  document.getElementById('ai-suggestion').style.display = 'none';
+  document.getElementById('alert-banner').style.display  = 'none';
+  document.getElementById('no-result').style.display     = 'none';
+  document.getElementById('dest-input').value = '';
+  initBuses();
+  updateMarkers();
+  renderBusList();
+  updateStats();
+}
+
+function togglePanel() {
+  panelCollapsed = !panelCollapsed;
+  document.getElementById('panel').classList.toggle('collapsed', panelCollapsed);
+}
+
+// ================================================================
+// AUTOCOMPLETE — real stop names only
+// ================================================================
+function populateAutocomplete() {
+  const dl = document.getElementById('dest-list');
+  dl.innerHTML = ALL_STOPS.map(s => `<option value="${s}">`).join('');
+}
+
+// ================================================================
+// QR CODE (decorative)
+// ================================================================
+function drawQR() {
+  const svg = document.getElementById('qr-svg-el');
+  if (!svg) return;
+  const cells = 13, size = 180, cell = size / cells;
+  let h = `<rect width="180" height="180" fill="#111118" rx="8"/>`;
+  const box = (x, y, s) => {
+    h += `<rect x="${x*cell}" y="${y*cell}" width="${s*cell}" height="${s*cell}" fill="#00e5ff" rx="2"/>`;
+    h += `<rect x="${(x+1)*cell}" y="${(y+1)*cell}" width="${(s-2)*cell}" height="${(s-2)*cell}" fill="#111118"/>`;
+    h += `<rect x="${(x+2)*cell}" y="${(y+2)*cell}" width="${(s-4)*cell}" height="${(s-4)*cell}" fill="#00e5ff"/>`;
+  };
+  box(0,0,7); box(cells-7,0,7); box(0,cells-7,7);
+  for (let r = 0; r < cells; r++) for (let c = 0; c < cells; c++) {
+    const inCorner = (r<8&&c<8)||(r<8&&c>cells-9)||(r>cells-9&&c<8);
+    const n = ((r*cells+c)*2654435761^((r*cells+c)>>3))>>>0;
+    if (!inCorner && (n%100)>45)
+      h += `<rect x="${c*cell+1}" y="${r*cell+1}" width="${cell-2}" height="${cell-2}" fill="#e8e8f0" rx="1"/>`;
+  }
+  svg.innerHTML = h;
+}
+
+// ================================================================
+// BOOTSTRAP
+// ================================================================
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('dest-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchRoute();
+  });
+
+  setTimeout(async () => {
+    document.getElementById('loading').classList.add('done');
+    try { await loadLeaflet(); } catch (e) { console.warn('Leaflet unavailable', e); }
+    populateAutocomplete();
+    initBuses();
+    initMap();
+    updateMarkers();
+    renderBusList();
+    updateStats();
+    drawQR();
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = setInterval(tick, 2000);
+  }, 2000);
+});
+</script>
+</body>
+</html>
